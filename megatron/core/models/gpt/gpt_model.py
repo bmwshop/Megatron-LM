@@ -53,6 +53,8 @@ class GPTModel(LanguageModule):
         rotary_percent: float = 1.0,
         rotary_base: int = 10000,
         seq_len_interpolation_factor: Optional[float] = None,
+        pretrained_max_position_embeddings: Optional[int] = None,
+        augment_seq: Dict[Any,Any] = None,
     ) -> None:
         super().__init__(config=config)
 
@@ -65,6 +67,8 @@ class GPTModel(LanguageModule):
         self.parallel_output = parallel_output
         self.share_embeddings_and_output_weights = share_embeddings_and_output_weights
         self.position_embedding_type = position_embedding_type
+        self.pretrained_max_position_embeddings = pretrained_max_position_embeddings
+        self.augment_seq = augment_seq
 
         # megatron core pipelining currently depends on model type
         # TODO: remove this dependency ?
@@ -89,6 +93,8 @@ class GPTModel(LanguageModule):
                 rotary_interleaved=self.config.rotary_interleaved,
                 seq_len_interpolation_factor=seq_len_interpolation_factor,
                 rotary_base=rotary_base,
+                pretrained_max_position_embeddings=pretrained_max_position_embeddings,
+                augment_seq=augment_seq,
             )
 
         # Transformer.

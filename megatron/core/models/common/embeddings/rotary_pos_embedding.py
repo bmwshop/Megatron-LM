@@ -12,6 +12,9 @@ import logging
 
 import torch
 from torch import Tensor, nn
+from nemo.utils import logging
+from typing import Dict, Any
+import random
 
 from megatron.core import parallel_state
 
@@ -62,6 +65,9 @@ class RotaryEmbedding(nn.Module):
         rotary_interleaved: bool = False,
         seq_len_interpolation_factor: float = None,
         rotary_base: int = 10000,
+        pretrained_max_position_embeddings: int = 4096,
+        augment_seq: Dict[Any,Any] = None,
+        logging_freq: int = 0.01,
     ) -> None:
         super().__init__()
 
@@ -78,8 +84,81 @@ class RotaryEmbedding(nn.Module):
                 / dim
             )
         )
+        self.pretrained_max_position_embeddings = pretrained_max_position_embeddings
+        self.augment_seq = augment_seq
+        self.logging_freq = logging_freq
+        logging.info(f'pretrained_max_position_embeddings: {pretrained_max_position_embeddings}, rotary_base: {rotary_base}, seq_len_interpolation_factor: {seq_len_interpolation_factor}, augment_seq: {augment_seq}')
 
-    def forward(self, max_seq_len: int, offset: int = 0) -> Tensor:
+    """
+        Augments the seq and adjusts its range to base_len
+        Args:
+            seq (tensor): tensor of positions
+            max_seq_len (int): length of this samplw
+            Applies stretch and shift augmentations and returns the augmented seq
+    """
+    def augment(self, seq, max_seq_len):
+        current_range = max_seq_len
+
+        target_augmented_length = self.augment_seq.get('target', None)
+        augmented_length_range = self.augment_seq.get('range', None)
+        if target_augmented_length and augmented_length_range:
+            logging.warning(f'target_augmented_length setting of {target_augmented_length} supercedes augmented_length_range of {augmented_length_range}')
+        elif augmented_length_range:
+            target_augmented_length = random.randint(max(augmented_length_range[0], max_seq_len),augmented_length_range[1])
+
+        if self.augment_seq.get('stretch', False):
+            if target_augmented_length:
+                max_stretch_factor  = target_augmented_length / current_range
+            else:
+                max_stretch_factor  = self.base_len * self.seq_len_interpolation_factor / current_range
+
+            stretch_factor = random.random() * max_stretch_factor
+            if self.augment_seq.get('discrete', False):
+                stretch_factor = int(stretch_factor)
+            seq *= stretch_factor
+            current_range *= stretch_factor
+        
+        num_shifts = self.augment_seq.get('num_shifts', None)
+        if num_shifts:
+            if target_augmented_length:
+                total_shift = target_augmented_length - current_range
+            else:
+                total_shift = self.base_len * self.seq_len_interpolation_factor - current_range
+
+        if self.augment_seq.get('allowed_shift_values', False):
+            # provides allowed values for each shift index
+            allowed_shift_values = self.augment_seq['allowed_shift_values']
+            assert (len(allowed_shift_values) == num_shifts), f'allowed_shift_values length {allowed_shift_values} does not match num_shifts {num_shifts}'
+            shifts = torch.zeros(num_shifts, dtype = torch.int)
+            for idx, allowed_values in enumerate(allowed_shift_values):
+                shifts[idx] = random.choice(allowed_values)
+                
+        else:
+            shifts = torch.rand(num_shifts)
+            if augmented_length_range is not None:
+                shifts = (augmented_length_range[0] + shifts * (augmented_length_range[1] - augmented_length_range[0]))/ num_shifts
+            else:
+                shifts = shifts / shifts.sum() * total_shift
+            
+            if self.augment_seq.get('discrete', False):
+                shifts = torch.round(shifts).to(torch.int)
+
+        if self.augment_seq.get('shift_indices', False):
+            indices2shift = self.augment_seq['shift_indices']
+        else:
+            indices2shift = (torch.rand(num_shifts) * max_seq_len).to(torch.int)
+
+        for idx, i in enumerate(indices2shift):
+            seq[i:] += shifts[idx]
+
+        if random.random() < self.logging_freq:
+            logging.info(f'indices2shift: {indices2shift}, shifts: {shifts}, total shift: {torch.sum(shifts)}')
+
+        return seq
+        
+
+    def forward(self, max_seq_len: int, offset: int =0, maybe_augment: bool=True) -> Tensor:
+
         """Forward pass of RoPE embedding.
 
         Args:
@@ -89,13 +168,25 @@ class RotaryEmbedding(nn.Module):
         Returns:
             Tensor: Embeddings after applying RoPE.
         """
+
+        if random.random() < self.logging_freq:
+            logging.info(f'max_seq_len: {max_seq_len}, maybe_augment: {maybe_augment}')
+
         seq = (
             torch.arange(max_seq_len, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
             + offset
         )
 
-        if self.seq_len_interpolation_factor is not None:
-            seq *= 1 / self.seq_len_interpolation_factor
+        if max_seq_len > self.pretrained_max_position_embeddings * self.seq_len_interpolation_factor:
+            # dynamic linear scaling (length > position we have learned)
+            logging.info(f'dynamic interpolation triggered: max_seq_len: {max_seq_len}, pretrained_max_position_embeddings: {self.pretrained_max_position_embeddings}, seq_len_interpolation_factor: {self.seq_len_interpolation_factor}')
+            seq *= 1 / (max_seq_len / self.pretrained_max_position_embeddings)
+        else:
+            if maybe_augment and self.augment_seq:
+                seq = self.augment(seq, max_seq_len)
+
+            if self.seq_len_interpolation_factor is not None:
+                seq *= 1 / self.seq_len_interpolation_factor
 
         freqs = torch.outer(seq, self.inv_freq)
         # first part even vector components, second part odd vector components,
