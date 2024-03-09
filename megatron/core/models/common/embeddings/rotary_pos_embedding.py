@@ -13,6 +13,7 @@ from torch import Tensor, nn
 from nemo.utils import logging
 from typing import Dict, Any
 import random
+import math
 
 from megatron.core import parallel_state
 
@@ -58,13 +59,18 @@ class RotaryEmbedding(nn.Module):
             dim = int(dim * rotary_percent)
 
         self.seq_len_interpolation_factor = seq_len_interpolation_factor
-        self.inv_freq = 1.0 / (
-            rotary_base
-            ** (
-                torch.arange(0, dim, 2, dtype=torch.float32, device=torch.cuda.current_device())
-                / dim
+        if augment_seq and 'wavelengths' in augment_seq:
+            wavelengths = torch.tensor(augment_seq['wavelengths'], dtype=torch.float32, device=torch.cuda.current_device())
+            self.inv_freq = 2 * math.pi / wavelengths
+            logging.info(f'using passed in wavelengths {augment_seq['wavelengths']}')
+        else:
+            self.inv_freq = 1.0 / (
+                rotary_base
+                ** (
+                    torch.arange(0, dim, 2, dtype=torch.float32, device=torch.cuda.current_device())
+                    / dim
+                )
             )
-        )
         self.pretrained_max_position_embeddings = pretrained_max_position_embeddings
         self.augment_seq = augment_seq
         self.logging_freq = logging_freq
