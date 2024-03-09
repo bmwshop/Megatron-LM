@@ -81,7 +81,7 @@ class RotaryEmbedding(nn.Module):
         if augment_seq and 'wavelengths' in augment_seq:
             wavelengths = torch.tensor(augment_seq['wavelengths'], dtype=torch.float32, device=torch.cuda.current_device())
             self.inv_freq = 2 * math.pi / wavelengths
-            logging.info(f'using passed in wavelengths {augment_seq['wavelengths']}')
+            logging.info(f'using passed in wavelengths {augment_seq["wavelengths"]}')
         else:
             self.inv_freq = 1.0 / (
                 rotary_base
