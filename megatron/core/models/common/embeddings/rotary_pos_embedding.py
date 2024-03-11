@@ -111,6 +111,8 @@ class RotaryEmbedding(nn.Module):
                 total_shift = target_augmented_length - current_range
             else:
                 total_shift = self.base_len * self.seq_len_interpolation_factor - current_range
+        else:
+            return seq
 
         if self.augment_seq.get('allowed_shift_values', False):
             # provides allowed values for each shift index
