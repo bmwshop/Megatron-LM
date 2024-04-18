@@ -93,6 +93,8 @@ class RotaryEmbedding(nn.Module):
         self.pretrained_max_position_embeddings = pretrained_max_position_embeddings
         self.augment_seq = augment_seq
         self.logging_freq = logging_freq
+
+        logging.info(f'kv_channels: {kv_channels}, rotary_percent: {rotary_percent}')
         logging.info(f'pretrained_max_position_embeddings: {pretrained_max_position_embeddings}, rotary_base: {rotary_base}, seq_len_interpolation_factor: {seq_len_interpolation_factor}, augment_seq: {augment_seq}')
 
     """
@@ -190,7 +192,7 @@ class RotaryEmbedding(nn.Module):
             logging.info(f'dynamic interpolation triggered: max_seq_len: {max_seq_len}, pretrained_max_position_embeddings: {self.pretrained_max_position_embeddings}, seq_len_interpolation_factor: {self.seq_len_interpolation_factor}')
             seq *= 1 / (max_seq_len / self.pretrained_max_position_embeddings)
         else:
-            if maybe_augment and self.augment_seq:
+            if maybe_augment and self.augment_seq and random.random() < self.augment_seq.get('freq', 1.0):
                 seq = self.augment(seq, max_seq_len)
 
             if self.seq_len_interpolation_factor is not None:
