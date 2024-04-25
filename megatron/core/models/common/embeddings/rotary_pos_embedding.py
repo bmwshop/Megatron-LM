@@ -173,13 +173,23 @@ class RotaryEmbedding(nn.Module):
             logging.info(f'dynamic interpolation triggered: max_seq_len: {max_seq_len}, pretrained_max_position_embeddings: {self.pretrained_max_position_embeddings}, seq_len_interpolation_factor: {self.seq_len_interpolation_factor}')
             seq *= 1 / (max_seq_len / self.pretrained_max_position_embeddings)
         else:
+            unshifted_seq = None
             if maybe_augment and self.augment_seq and random.random() < self.augment_seq.get('freq', 1.0):
+                unshifted_seq = seq.clone()
                 seq = self.augment(seq, max_seq_len)
 
             if self.seq_len_interpolation_factor is not None:
                 seq *= 1 / self.seq_len_interpolation_factor
+                if unshifted_seq is not None:
+                    unshifted_seq *= 1 / self.seq_len_interpolation_factor
 
-        freqs = torch.outer(seq, self.inv_freq)
+        if maybe_augment and self.augment_seq and self.augment_seq.get('min_dim_shifted', None):
+            # fseq: T x D
+            fseq = unshifted_seq.unsqueeze(1).expand(unshifted_seq.shape[0], self.inv_freq.shape[0]).clone()
+            fseq[:,self.augment_seq.get('min_dim_shifted'):] = seq.view(-1,1)
+            freqs = torch.mul(fseq, self.inv_freq)
+        else:
+            freqs = torch.outer(seq, self.inv_freq)
         # first part even vector components, second part odd vector components,
         #  2 * dim in dimension size
         emb = torch.cat((freqs, freqs), dim=-1)
