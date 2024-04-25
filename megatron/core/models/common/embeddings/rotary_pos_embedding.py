@@ -174,7 +174,7 @@ class RotaryEmbedding(nn.Module):
             seq *= 1 / (max_seq_len / self.pretrained_max_position_embeddings)
         else:
             unshifted_seq = None
-            if maybe_augment and self.augment_seq and random.random() < self.augment_seq.get('freq', 1.0):
+            if maybe_augment and self.augment_seq and random.random() < self.augment_seq.get('freq', 1.0) and max_seq_len > self.augment_seq.get('min_seq_len', 0):
                 unshifted_seq = seq.clone()
                 seq = self.augment(seq, max_seq_len)
 
@@ -183,11 +183,22 @@ class RotaryEmbedding(nn.Module):
                 if unshifted_seq is not None:
                     unshifted_seq *= 1 / self.seq_len_interpolation_factor
 
+        dim = self.inv_freq.shape[0]
+
+        if self.augment_seq and 'token_specific_bases' in self.augment_seq:
+            tsb = self.augment_seq['token_specific_bases']
+            tsif = self.inv_freq.unsqueeze(1).expand(max_seq_len, dim).clone()
+            previous_tok_cutoff = 0
+            for tok_cutoff, base in tsb.items(): # careful here. the token cutoffs should not exceed max_seq_len
+                  # also how do we handle shifts? do we apply cutoffs on the original sequence or on the shifted ones?
+                tsif[previous_tok_cutoff:tok_cutoff] = base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=torch.cuda.current_device()) / dim)
+
         if maybe_augment and self.augment_seq and self.augment_seq.get('min_dim_shifted', None):
             # fseq: T x D
-            fseq = unshifted_seq.unsqueeze(1).expand(unshifted_seq.shape[0], self.inv_freq.shape[0]).clone()
+            fseq = unshifted_seq.unsqueeze(1).expand(max_seq_len, dim).clone()
             fseq[:,self.augment_seq.get('min_dim_shifted'):] = seq.view(-1,1)
             freqs = torch.mul(fseq, self.inv_freq)
+            del fseq
         else:
             freqs = torch.outer(seq, self.inv_freq)
         # first part even vector components, second part odd vector components,
