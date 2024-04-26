@@ -60,8 +60,7 @@ class RotaryEmbedding(nn.Module):
 
         self.seq_len_interpolation_factor = seq_len_interpolation_factor
         if augment_seq and 'wavelengths' in augment_seq:
-            wavelengths = torch.tensor(augment_seq['wavelengths'], dtype=torch.float32, device=torch.cuda.current_device())
-            self.inv_freq = 2 * math.pi / wavelengths
+            self.inv_freq = 2 * math.pi / torch.tensor(augment_seq['wavelengths'], dtype=torch.float32, device=torch.cuda.current_device())
             logging.info(f'using passed in wavelengths {augment_seq["wavelengths"]}')
         else:
             self.inv_freq = 1.0 / (
@@ -183,24 +182,31 @@ class RotaryEmbedding(nn.Module):
                 if unshifted_seq is not None:
                     unshifted_seq *= 1 / self.seq_len_interpolation_factor
 
-        dim = self.inv_freq.shape[0]
 
-        if self.augment_seq and 'token_specific_bases' in self.augment_seq:
+        if unshifted_seq is not None and 'token_specific_bases' in self.augment_seq:
             tsb = self.augment_seq['token_specific_bases']
-            tsif = self.inv_freq.unsqueeze(1).expand(max_seq_len, dim).clone()
+            dim = self.inv_freq.shape[0] * 2
+            # token specific inverted frequencies: T x D
+            tsif = self.inv_freq.unsqueeze(1).expand(max_seq_len, self.inv_freq.shape[0]).clone()
             previous_tok_cutoff = 0
             for tok_cutoff, base in tsb.items(): # careful here. the token cutoffs should not exceed max_seq_len
-                  # also how do we handle shifts? do we apply cutoffs on the original sequence or on the shifted ones?
+                  # we apply cutoffs on the shifted positions.so maybe start your shifts not from 0
+                if tok_cutoff > max_seq_len:
+                    break # do we need to handle the end?
                 tsif[previous_tok_cutoff:tok_cutoff] = base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=torch.cuda.current_device()) / dim)
 
-        if maybe_augment and self.augment_seq and self.augment_seq.get('min_dim_shifted', None):
+        if unshifted_seq is not None and self.augment_seq.get('min_dim_shifted', None):
             # fseq: T x D
-            fseq = unshifted_seq.unsqueeze(1).expand(max_seq_len, dim).clone()
+            fseq = unshifted_seq.unsqueeze(1).expand(max_seq_len, self.inv_freq.shape[0]).clone()
             fseq[:,self.augment_seq.get('min_dim_shifted'):] = seq.view(-1,1)
             freqs = torch.mul(fseq, self.inv_freq)
             del fseq
         else:
             freqs = torch.outer(seq, self.inv_freq)
+
+        del seq
+        if unshifted_seq is not None:
+            del unshifted_seq
         # first part even vector components, second part odd vector components,
         #  2 * dim in dimension size
         emb = torch.cat((freqs, freqs), dim=-1)
