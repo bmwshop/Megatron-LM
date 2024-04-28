@@ -174,7 +174,7 @@ class RotaryEmbedding(nn.Module):
         else:
             unshifted_seq = None
             if maybe_augment and self.augment_seq and random.random() < self.augment_seq.get('freq', 1.0) and max_seq_len > self.augment_seq.get('min_seq_len', 0):
-                unshifted_seq = seq.clone()
+                # unshifted_seq = seq.clone()
                 seq = self.augment(seq, max_seq_len)
 
             if self.seq_len_interpolation_factor is not None:
