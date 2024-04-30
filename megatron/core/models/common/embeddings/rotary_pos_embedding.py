@@ -126,7 +126,7 @@ class RotaryEmbedding(nn.Module):
             current_range *= stretch_factor
         
         num_shifts = self.augment_seq.get('num_shifts', None)
-        if num_shifts:
+        if num_shifts is not None and num_shifts > 0:
             if target_augmented_length:
                 total_shift = target_augmented_length - current_range
             else:
@@ -193,7 +193,7 @@ class RotaryEmbedding(nn.Module):
         else:
             unshifted_seq = None
             if maybe_augment and self.augment_seq and random.random() < self.augment_seq.get('freq', 1.0) and max_seq_len > self.augment_seq.get('min_seq_len', 0):
-                # unshifted_seq = seq.clone()
+                unshifted_seq = seq.clone()
                 seq = self.augment(seq, max_seq_len)
 
             if self.seq_len_interpolation_factor is not None:
@@ -203,6 +203,7 @@ class RotaryEmbedding(nn.Module):
 
 
         if unshifted_seq is not None and 'token_specific_bases' in self.augment_seq:
+            # this is still unfinished
             tsb = self.augment_seq['token_specific_bases']
             dim = self.inv_freq.shape[0] * 2
             # token specific inverted frequencies: T x D
@@ -223,9 +224,6 @@ class RotaryEmbedding(nn.Module):
         else:
             freqs = torch.outer(seq, self.inv_freq)
 
-        del seq
-        if unshifted_seq is not None:
-            del unshifted_seq
         # first part even vector components, second part odd vector components,
         #  2 * dim in dimension size
         if not self.rotary_interleaved:
