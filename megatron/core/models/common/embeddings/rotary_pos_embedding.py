@@ -196,6 +196,7 @@ class RotaryEmbedding(nn.Module):
             previous_base = self.rotary_base
             for tok_cutoff, base in tsb.items(): # careful here. the token cutoffs should not exceed max_seq_len
                   # we apply cutoffs on the shifted positions.so maybe start your shifts not from 0
+                tok_cutoff = int(tok_cutoff)
                 if tok_cutoff > max_seq_len:
                     break # do we need to handle the end?
                 tsif[previous_tok_cutoff:tok_cutoff, :] = previous_base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=torch.cuda.current_device()) / dim)
