@@ -59,6 +59,8 @@ class RotaryEmbedding(nn.Module):
         rotary_base (int, optional): Base period for rotary position embeddings. Defaults to 10000.
     """
 
+    scaling_factor = 1 # sharpen the scores before softmax?
+
     def __init__(
         self,
         kv_channels: int,
@@ -93,6 +95,11 @@ class RotaryEmbedding(nn.Module):
         self.pretrained_max_position_embeddings = pretrained_max_position_embeddings
         self.augment_seq = augment_seq
         self.logging_freq = logging_freq
+
+        
+        if self.augment_seq is not None and self.augment_seq.get('scaling_factor', None):
+            RotaryEmbedding.scaling_factor = self.augment_seq['scaling_factor']
+            logging.info(f'using scaling_factor: {RotaryEmbedding.scaling_factor}')
 
         logging.info(f'kv_channels: {kv_channels}, rotary_percent: {rotary_percent}')
         logging.info(f'pretrained_max_position_embeddings: {pretrained_max_position_embeddings}, rotary_base: {rotary_base}, seq_len_interpolation_factor: {seq_len_interpolation_factor}, augment_seq: {augment_seq}')
@@ -326,8 +333,8 @@ def apply_rotary_pos_emb_bshd(t: Tensor, freqs: Tensor, rotary_interleaved: bool
 
     # first part is cosine component
     # second part is sine component, need to change signs with _rotate_half method
-    cos_ = torch.cos(freqs).to(t.dtype)
-    sin_ = torch.sin(freqs).to(t.dtype)
+    cos_ = torch.cos(freqs).to(t.dtype) * RotaryEmbedding.scaling_factor
+    sin_ = torch.sin(freqs).to(t.dtype) * RotaryEmbedding.scaling_factor
 
     t = (t * cos_) + (_rotate_half(t, rotary_interleaved) * sin_)
     return torch.cat((t, t_pass), dim=-1)
