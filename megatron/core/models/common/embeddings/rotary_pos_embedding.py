@@ -101,6 +101,7 @@ class RotaryEmbedding(nn.Module):
             RotaryEmbedding.scaling_factor = self.augment_seq['scaling_factor']
             logging.info(f'using scaling_factor: {RotaryEmbedding.scaling_factor}')
 
+
         logging.info(f'kv_channels: {kv_channels}, rotary_percent: {rotary_percent}')
         logging.info(f'pretrained_max_position_embeddings: {pretrained_max_position_embeddings}, rotary_base: {rotary_base}, seq_len_interpolation_factor: {seq_len_interpolation_factor}, augment_seq: {augment_seq}')
 
@@ -113,6 +114,12 @@ class RotaryEmbedding(nn.Module):
     """
     def augment(self, seq, max_seq_len):
         current_range = max_seq_len
+
+        if self.augment_seq.get('scaling_factor_range', None):
+            sf_range = self.augment_seq.get('scaling_factor_range')
+            RotaryEmbedding.scaling_factor = random.uniform(sf_range[0], sf_range[1])
+            if random.random() < self.logging_freq:
+                logging.info(f'applying random scaling factor: {RotaryEmbedding.scaling_factor}')
 
         target_augmented_length = self.augment_seq.get('target', None)
         augmented_length_range = self.augment_seq.get('range', None)
