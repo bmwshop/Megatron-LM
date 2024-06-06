@@ -608,6 +608,12 @@ def _add_network_size_args(parser):
                        'Deprecated: use --position-embedding-type')
     group.add_argument('--rotary-percent', type=float, default=1.0,
                        help='Percent of rotary dimension to use, default 100%%')
+    group.add_argument('--rotary-pretrained-max-position-embeddings', type=int, default=None,
+                       help='Max position embeddings that the model saw in training')
+    group.add_argument('--rotary-augment-seq', type=str, default=None,
+                       help='Rotary Augmentation parameters')
+    group.add_argument('--rotary-base', type=int, default=10000,
+                       help='Base frequency for rotary embeddings, default 10000')
     group.add_argument('--rotary-seq-len-interpolation-factor', type=int, default=None,
                        help='Sequence length interpolation factor for rotary embeddings.')
     group.add_argument('--no-position-embedding',
