@@ -104,7 +104,7 @@ class RotaryEmbedding(nn.Module):
 
         logging.info(f'kv_channels: {kv_channels}, rotary_percent: {rotary_percent}')
         logging.info(f'pretrained_max_position_embeddings: {pretrained_max_position_embeddings}, rotary_base: {rotary_base}, seq_len_interpolation_factor: {seq_len_interpolation_factor}, augment_seq: {augment_seq}')
-
+        logging.info(f'cp world size: {parallel_state.get_context_parallel_world_size()}')
     """
         Augments the seq and adjusts its range to base_len
         Args:
