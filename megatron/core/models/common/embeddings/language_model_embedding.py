@@ -93,7 +93,7 @@ class LanguageModelEmbedding(MegatronModule):
             Tensor: The output embeddings
         """
 
-        logging.info(f'input_ids shape: {input_ids.size()}')
+        logging.debug(f'input_ids shape: {input_ids.size()}')
         word_embeddings = self.word_embeddings(input_ids)
         if self.add_position_embedding:
             position_embeddings = self.position_embeddings(position_ids)
@@ -118,7 +118,7 @@ class LanguageModelEmbedding(MegatronModule):
 
         # Dropout.
         if self.config.sequence_parallel:
-            logging.info(f'embeddings shape: {embeddings.size()}')
+            logging.debug(f'embeddings shape: {embeddings.size()}')
             embeddings = tensor_parallel.scatter_to_sequence_parallel_region(embeddings)
             # `scatter_to_sequence_parallel_region` returns a view, which prevents
             # the original tensor from being garbage collected. Clone to facilitate GC.
