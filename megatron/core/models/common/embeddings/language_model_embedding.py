@@ -8,6 +8,7 @@ from torch import Tensor
 from megatron.core import tensor_parallel
 from megatron.core.transformer.module import MegatronModule
 from megatron.core.transformer.transformer_config import TransformerConfig
+import logging
 
 
 class LanguageModelEmbedding(MegatronModule):
@@ -115,6 +116,7 @@ class LanguageModelEmbedding(MegatronModule):
 
         # Dropout.
         if self.config.sequence_parallel:
+            logging.info(f'embeddings shape: {embeddings.size()}')
             embeddings = tensor_parallel.scatter_to_sequence_parallel_region(embeddings)
             # `scatter_to_sequence_parallel_region` returns a view, which prevents
             # the original tensor from being garbage collected. Clone to facilitate GC.
