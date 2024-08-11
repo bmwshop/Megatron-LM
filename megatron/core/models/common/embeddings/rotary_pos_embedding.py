@@ -203,12 +203,12 @@ class RotaryEmbedding(nn.Module):
             + offset
         )
 
+        unshifted_seq = None
         if max_seq_len > self.pretrained_max_position_embeddings * self.seq_len_interpolation_factor:
             # dynamic linear scaling (length > position we have learned)
             logging.info(f'dynamic interpolation triggered: max_seq_len: {max_seq_len}, pretrained_max_position_embeddings: {self.pretrained_max_position_embeddings}, seq_len_interpolation_factor: {self.seq_len_interpolation_factor}')
             seq *= 1 / (max_seq_len / self.pretrained_max_position_embeddings)
         else:
-            unshifted_seq = None
             if maybe_augment and self.augment_seq and random.random() < self.augment_seq.get('freq', 1.0) and max_seq_len > self.augment_seq.get('min_seq_len', 0):
                 unshifted_seq = seq.clone()
                 seq = self.augment(seq, max_seq_len)
